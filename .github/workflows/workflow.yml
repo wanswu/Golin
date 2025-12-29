@@ -16,7 +16,6 @@ jobs:
           - { goos: linux, goarch: amd64, binary: golin_linux_amd64 }
           - { goos: linux, goarch: arm64, binary: golin_linux_arm64 }
           - { goos: windows, goarch: amd64, binary: golin_win_amd64.exe }
-          - { goos: windows, goarch: arm64, binary: golin_win_arm64.exe }
           - { goos: darwin, goarch: amd64, binary: golin_darwin_amd64 }
           - { goos: darwin, goarch: arm64, binary: golin_darwin_arm64 }
 
