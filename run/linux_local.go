@@ -3,14 +3,15 @@ package run
 import (
 	"bytes"
 	"fmt"
-	"github.com/shirou/gopsutil/v3/docker"
-	"go.uber.org/zap"
 	"html/template"
 	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
 	"strings"
+
+	"github.com/shirou/gopsutil/v3/docker"
+	"go.uber.org/zap"
 )
 
 func LocalrunLinux() {
@@ -30,13 +31,13 @@ func LocalrunLinux() {
 			Cpu:         runLocalCmd(`cat /proc/cpuinfo | grep name | sort | uniq|awk -F ":" '{print $2}'| xargs`),
 			CpuPhysical: runLocalCmd(`cat /proc/cpuinfo |grep "physical id"|sort|uniq| wc -l`),
 			CpuCore:     runLocalCmd(`cat /proc/cpuinfo | grep "core id" | sort | uniq | wc -l`),
-			Version:     runLocalCmd("rpm -q centos-release"),
-			ProductName: runLocalCmd(`dmidecode -t system | grep 'Product Name'|awk -F ":" '{print $2}'|xargs `),
+			Version:     runLocalCmd(`grep "PRETTY_NAME" /etc/*release | cut -d'"' -f2 | tr -d '\n' && echo " $(uname -r)"`),
+			ProductName: runLocalCmd(`command -v dmidecode >/dev/null 2>&1 && dmidecode -t system | grep 'Product Name'|awk -F ":" '{print $2}'|xargs || cat /sys/class/dmi/id/product_name`),
 			Free:        runLocalCmd(`free -g | grep Mem | awk '{print $2}'`),
 			Ping:        strings.Contains(runLocalCmd(`ping www.baidu.com -c1 -w1 >/dev/null;echo $?`), "0"),
 		},
 		SystemState: SystemInfo{
-			Cpu:    runLocalCmd(`top -b -n 1 | grep "Cpu(s)"|awk '{print $8}'`),
+			Cpu:    runLocalCmd(`top -bn1 | grep "Cpu(s)" | sed 's/.*, *\([0-9.]*\)%* id.*/\1/'`),
 			Memory: runLocalCmd(`echo "$(free -g | awk 'NR==2 {printf "%.2f", ($3/($2)) * 100}')"`),
 			Load:   runLocalCmd(`uptime`),
 			Time:   runLocalCmd("date"),
@@ -51,7 +52,7 @@ func LocalrunLinux() {
 			Maxrepeat:   runLocalCmd(`grep '^[^#]' /etc/security/pwquality.conf |grep "maxrepeat"|awk -F= '{print $2}'`),
 			Maxsequence: runLocalCmd(`grep '^[^#]' /etc/security/pwquality.conf |grep "maxsequence"|awk -F= '{print $2}'`),
 		},
-		Address:       runLocalCmd("ifconfig"),
+		Address:       runLocalCmd(`command -v ifconfig >/dev/null 2>&1 && ifconfig || ip a`),
 		Disk:          runLocalCmd("df -h"),
 		Dns:           runLocalCmd(`cat /etc/resolv.conf|grep -v "^#"|grep -v "^$"`),
 		PamSSH:        runLocalCmd(`cat /etc/pam.d/sshd|grep -v "^#"|grep -v "^$"`),
@@ -72,7 +73,7 @@ func LocalrunLinux() {
 		HeadLog:       runLocalCmd(`head -n 10 /var/log/messages /var/log/secure /var/log/audit/audit.log  /var/log/yum.log /var/log/cron`),
 		TailLog:       runLocalCmd(`tail -n 10 /var/log/messages /var/log/secure /var/log/audit/audit.log  /var/log/yum.log /var/log/cron`),
 		Logrotate:     runLocalCmd(`awk 'FNR==1{if(NR!=1)print "\nFile: " FILENAME; else print "File: " FILENAME}{if ($0 !~ /^#/ && $0 !~ /^$/) print $0}' /etc/logrotate.conf /etc/logrotate.d/*`),
-		RpmInstall:    runLocalCmd("rpm -qa"),
+		RpmInstall:    runLocalCmd(`command -v rpm >/dev/null 2>&1 && rpm -qa || dpkg-query -W -f='${Package} ${Version}\n'`),
 		HomeLimits:    runLocalCmd("ls -lh /home"),
 		LastLog:       runLocalCmd("lastlog"),
 		User:          make([]LinUser, 0),

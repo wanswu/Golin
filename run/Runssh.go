@@ -2,7 +2,6 @@ package run
 
 import (
 	"fmt"
-	"golang.org/x/crypto/ssh"
 	"golin/global"
 	"html/template"
 	"io/fs"
@@ -11,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // Runssh 通过调用ssh协议执行命令，写入到文件,并减一个线程数
@@ -77,13 +78,13 @@ func Runssh(sshname string, sshHost string, sshUser string, sshPasswrod string, 
 			Cpu:         runCmd(`cat /proc/cpuinfo | grep name | sort | uniq|awk -F ":" '{print $2}'| xargs`, sshClient),
 			CpuPhysical: runCmd(`cat /proc/cpuinfo |grep "physical id"|sort|uniq| wc -l`, sshClient),
 			CpuCore:     runCmd(`cat /proc/cpuinfo | grep "core id" | sort | uniq | wc -l`, sshClient),
-			Version:     runCmd("rpm -q centos-release", sshClient),
-			ProductName: runCmd(`dmidecode -t system | grep 'Product Name'|awk -F ":" '{print $2}'|xargs `, sshClient),
+			Version:     runCmd(`grep "PRETTY_NAME" /etc/*release | cut -d'"' -f2 | tr -d '\n' && echo " $(uname -r)"`, sshClient),
+			ProductName: runCmd(`command -v dmidecode >/dev/null 2>&1 && dmidecode -t system | grep 'Product Name'|awk -F ":" '{print $2}'|xargs || cat /sys/class/dmi/id/product_name`, sshClient),
 			Free:        runCmd(`free -g | grep Mem | awk '{print $2}'`, sshClient),
 			Ping:        strings.Contains(runCmd(`ping www.baidu.com -c1 -w1 >/dev/null;echo $?`, sshClient), "0"),
 		},
 		SystemState: SystemInfo{
-			Cpu:    runCmd(`top -b -n 1 | grep "Cpu(s)"|awk '{print $8}'`, sshClient),
+			Cpu:    runCmd(`top -bn1 | grep "Cpu(s)" | sed 's/.*, *\([0-9.]*\)%* id.*/\1/'`, sshClient),
 			Memory: runCmd(`echo "$(free -g | awk 'NR==2 {printf "%.2f", ($3/($2)) * 100}')"`, sshClient),
 			Load:   runCmd(`uptime`, sshClient),
 			Time:   runCmd("date", sshClient),
@@ -98,7 +99,7 @@ func Runssh(sshname string, sshHost string, sshUser string, sshPasswrod string, 
 			Maxrepeat:   runCmd(`grep '^[^#]' /etc/security/pwquality.conf |grep "maxrepeat"|awk -F= '{print $2}'`, sshClient),
 			Maxsequence: runCmd(`grep '^[^#]' /etc/security/pwquality.conf |grep "maxsequence"|awk -F= '{print $2}'`, sshClient),
 		},
-		Address:       runCmd("ifconfig", sshClient),
+		Address:       runCmd(`command -v ifconfig >/dev/null 2>&1 && ifconfig || ip a`, sshClient),
 		Disk:          runCmd("df -h", sshClient),
 		Dns:           runCmd(`cat /etc/resolv.conf|grep -v "^#"|grep -v "^$"`, sshClient),
 		PamSSH:        runCmd(`cat /etc/pam.d/sshd|grep -v "^#"|grep -v "^$"`, sshClient),
@@ -120,7 +121,7 @@ func Runssh(sshname string, sshHost string, sshUser string, sshPasswrod string, 
 		HeadLog:       runCmd(`head -n 10 /var/log/messages /var/log/secure /var/log/audit/audit.log  /var/log/yum.log /var/log/cron`, sshClient),
 		TailLog:       runCmd(`tail -n 10 /var/log/messages /var/log/secure /var/log/audit/audit.log  /var/log/yum.log /var/log/cron`, sshClient),
 		Logrotate:     runCmd(`awk 'FNR==1{if(NR!=1)print "\nFile: " FILENAME; else print "File: " FILENAME}{if ($0 !~ /^#/ && $0 !~ /^$/) print $0}' /etc/logrotate.conf /etc/logrotate.d/*`, sshClient),
-		RpmInstall:    runCmd("rpm -qa", sshClient),
+		RpmInstall:    runCmd(`command -v rpm >/dev/null 2>&1 && rpm -qa || dpkg-query -W -f='${Package} ${Version}\n'`, sshClient),
 		HomeLimits:    runCmd("ls -lh /home", sshClient),
 		LastLog:       runCmd("lastlog", sshClient),
 		User:          make([]LinUser, 0),
